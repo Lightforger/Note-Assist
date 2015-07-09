@@ -1372,14 +1372,32 @@ NA.snap = function (mode, theNote, x, y, width, height) {
         //               ' ' + (((largestShapeGroup.right - largestShapeGroup.left) + notePadding * 2) * NA.globals.fitToScreenRatio) +
         //               ' ' + (((largestShapeGroup.bottom - largestShapeGroup.top) + notePadding * 2) * NA.globals.fitToScreenRatio));
         if (((width * height) / largestShapeGroup.size) < 36) { // if the resize ration is no bigger than 32 times, prevents notes snapping to tiny sizes
-            theNote.style.left = ((x + largestShapeGroup.left - notePadding) * NA.globals.fitToScreenRatio) + 'px'; //x & y are the offsets of the selected area on the full image
-            theNote.style.top = ((y + largestShapeGroup.top - notePadding) * NA.globals.fitToScreenRatio) + 'px';
 
-            theNote.style.width = Math.max(10, ((largestShapeGroup.right - largestShapeGroup.left) + notePadding * 2) * NA.globals.fitToScreenRatio) + 'px'; // no smaller than 10px
-            theNote.style.height = Math.max(10, ((largestShapeGroup.bottom - largestShapeGroup.top) + notePadding * 2) * NA.globals.fitToScreenRatio) + 'px';
+            var newLeft = ((x + largestShapeGroup.left - notePadding) * NA.globals.fitToScreenRatio); //x & y are the offsets of the selected area on the full image
+            var newTop  = ((y + largestShapeGroup.top - notePadding) * NA.globals.fitToScreenRatio);
+            var newWidth  = Math.max(10, ((largestShapeGroup.right - largestShapeGroup.left) + notePadding * 2) * NA.globals.fitToScreenRatio);
+            var newHeight = Math.max(10, ((largestShapeGroup.bottom - largestShapeGroup.top) + notePadding * 2) * NA.globals.fitToScreenRatio);
 
-            theNoteInner.style.width = Math.max(8, ((largestShapeGroup.right - largestShapeGroup.left) + (notePadding * 2) - 2) * NA.globals.fitToScreenRatio) + 'px'; // no smaller than 8px
-            theNoteInner.style.height = Math.max(8, ((largestShapeGroup.bottom - largestShapeGroup.top) + (notePadding * 2) - 2) * NA.globals.fitToScreenRatio) + 'px';
+            if (theNote.style.left != (newLeft + 'px') ||
+                theNote.style.top != (newTop + 'px') ||
+                theNote.style.width !=  (newWidth + 'px') ||
+                theNote.style.height != (newHeight + 'px'))
+            {
+
+                theNote.style.left = newLeft + 'px';
+                theNote.style.top = newTop + 'px';
+
+
+
+                theNote.style.width =  newWidth + 'px'; // no smaller than 10px
+                theNote.style.height = newHeight + 'px';
+
+                if (theNoteInner.className.indexOf('unsaved') == -1) { // if not already marked as unsaved
+                    theNoteInner.className += ' unsaved';            // mark as unsaved if changed, goes onto inner note
+                }
+                theNoteInner.style.width = (newWidth -2) + 'px'; // inner note is 2px smaller
+                theNoteInner.style.height = (newHeight - 2) + 'px';
+            }
         }
         NA.benchmark('T-resizeNote T:');
     }
