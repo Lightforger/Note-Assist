@@ -3,11 +3,11 @@
 // @description  For danbooru.donmai (2) - experimental text-detection script to automatically fit notes to text
 // @author       itsonlyaname
 // @namespace    itsonlyaname
-// @include       http://*.donmai.us/posts/*
+// @include      http://*.donmai.us/posts/*
 // @include      https://*.donmai.us/posts/*
-// @include       http://donmai.us/posts/*
+// @include      http://donmai.us/posts/*
 // @include      https://donmai.us/posts/*
-// @version      1.1
+// @version      1.2
 // @downloadURL  https://raw.githubusercontent.com/Lightforger/Note-Assist/master/Note-Assist.user.js
 // @grant        none
 // ==/UserScript==
@@ -33,9 +33,13 @@ NA.defaultSettings = {
 
     alwaysResize: true, // true = Dragged notes will always resize, except if shift is held  //false = only resize if shift if held
 
-    clickResizeActive: true, // A click with the selected combination of ctrl & shift will resize the note, fitting it to text
-    clickResizeCtrl: true,
+    clickResizeActive: true, // A click with the selected combination of ctrl & shift will resize the note
+    clickResizeCtrl: true,   // fitting it to text inside the note
     clickResizeShift: false,
+
+    clickResizeRectangleActive: true, // A click with the selected combination of ctrl & shift will resize the note
+    clickResizeRectangleCtrl: false,  // fitting it to a square textbox inside OR outside the note
+    clickResizeRectangleShift: true,
     // Advanced settings
 
     forceEnd: 20000,  // number of miliseconds to let the code run before it's considered as "stuck".
@@ -164,7 +168,7 @@ NA.debug.bwslider = function () { // debug function for 'convertToBlackWhite'
     //    NA.convertToBlackWhite(imageData, color, slider.value);
 
     //    context.putImageData(imageData, 0, 0);
-    //}
+    // }
 };
 
 
@@ -191,6 +195,7 @@ NA.saveAllNotes = function () {
         }
     });
 };
+
 //==========================================================
 // Custom objects
 //==========================================================
@@ -356,7 +361,7 @@ NA.convertToBlackWhite = function (imageData, textColor, cutOff) {
             //pixelData[i+3] = 255;               // but text on transparent = very rare
 
             pixelData[i] = luma;
-            //pixelData[i + 1] = 0; // not used atm, faster if we don't have to clean it
+            //pixelData[i + 1] = 0; // not used atm, faster if we don't have to clean it, debugging is easier with it enabled
             //pixelData[i + 2] = 0; // not used atm, faster if we don't have to clean it
         }
     }
@@ -442,7 +447,7 @@ NA.fillborder = function (data) {
         //    else {
         //        break;
         //    }
-        //}
+        // }
     }
 };
 
@@ -910,13 +915,19 @@ NA.connectShapes = function (allShapes, mode) {
     var toRemoveIndexes = [];
     for (var indexOuter = allShapeGroups.length - 1; indexOuter >= 0; indexOuter--) {
         if (toRemoveIndexes.indexOf(indexOuter) != -1) continue;
-        var base_top = allShapeGroups[indexOuter].top - maxConnectDistance * 2.5;
-        var base_bottom = allShapeGroups[indexOuter].bottom + maxConnectDistance * 2.5;
-        var base_left = allShapeGroups[indexOuter].left - maxConnectDistance * 2.5;
-        var base_right = allShapeGroups[indexOuter].right + maxConnectDistance * 2.5;
+        var base_top = allShapeGroups[indexOuter].top;
+        var base_bottom = allShapeGroups[indexOuter].bottom;
+        var base_left = allShapeGroups[indexOuter].left;
+        var base_right = allShapeGroups[indexOuter].right;
 
         for (var indexInner = allShapeGroups.length - 1; indexInner >= 0; indexInner--) {
             if (toRemoveIndexes.indexOf(indexInner) != -1 || indexInner == indexOuter) continue;
+            
+            var comp_left = allShapeGroups[indexInner].left;
+            var comp_top = allShapeGroups[indexInner].top;
+            
+            var comp_right = allShapeGroups[indexInner].right;
+            var comp_bottom = allShapeGroups[indexInner].bottom;
 
             //console.log('indexOuter: '+indexOuter + ' connecting to '+indexInner+'\n'+
             //            base_top+' '+base_bottom+' '+base_left+' '+base_right+'\n'+
@@ -926,38 +937,40 @@ NA.connectShapes = function (allShapes, mode) {
             //    base_bottom < allShapeGroups[indexInner].top ||
             //    base_left > allShapeGroups[indexInner].right ||
             //    base_right < allShapeGroups[indexInner].left));
-            if (base_top > allShapeGroups[indexInner].bottom ||
-                base_bottom < allShapeGroups[indexInner].top ||
-                base_left > allShapeGroups[indexInner].right ||
-                base_right < allShapeGroups[indexInner].left) {
-                // no shape group found
+
+            if ((base_top -    (maxConnectDistance * 2.5)) > comp_bottom ||
+                (base_bottom + (maxConnectDistance * 2.5)) < comp_top ||
+                (base_left -   (maxConnectDistance * 2.5)) > comp_right ||
+                (base_right +  (maxConnectDistance * 2.5)) < comp_left) {
+                // first check, if they DON'T overlap with the added maxConnectDistance -> not in range
                 continue;
             }
-            else { // shape group is within range
+            else { // shape group is within (maxConnectDistance * 2.5) range
 
-                if (!(allShapeGroups[indexOuter].top > allShapeGroups[indexInner].bottom ||
-                allShapeGroups[indexOuter].bottom < allShapeGroups[indexInner].top ||
-                allShapeGroups[indexOuter].left > allShapeGroups[indexInner].right ||
-                allShapeGroups[indexOuter].right < allShapeGroups[indexInner].left)) {
-                    // if they already overlap even without the connect distance, then their center don't have to be aligned
+                if (!(base_top > comp_bottom ||
+                base_bottom < comp_top ||
+                base_left > comp_right ||
+                base_right < comp_left)) {
+                    // check if they DO overlap even without the connect distance, then their center don't have to be aligned
 
                     allShapeGroups[indexOuter] = new NA.shapeGroup(allShapeGroups[indexOuter].shapes.concat(allShapeGroups[indexInner]));
                     toRemoveIndexes.push(indexInner);
                 }
-                else { // they don't overlap, but are close to eachother, only allow horizonal or vertical connects, not diagonal
-                    var shapeBaseCenterHorizontal = (base_right + base_left) / 2;
-                    var shapeBaseCenterVertical = (base_bottom + base_top) / 2;
+                else { // they don't overlap, they are within within (maxConnectDistance * 2.5) range
 
-                    var shapeCompCenterHorizontal = (allShapeGroups[indexInner].right + allShapeGroups[indexInner].left) / 2;
-                    var shapeCompCenterVertical = (allShapeGroups[indexInner].bottom + allShapeGroups[indexInner].top) / 2;
+                    // the shapes must at least "overlap" (single dimension) this much to be combined, this exludes "overlap" of only a few pixels and diagonals
+                    var minHorizontal = allShapeGroups[indexOuter].width * 0.25; // at least 25%
+                    var minVertical   = allShapeGroups[indexOuter].height * 0.25;
 
-                    if (Math.abs(shapeBaseCenterHorizontal - shapeCompCenterHorizontal) < (allShapeGroups[indexOuter].width/ 1.5) ||
-                        Math.abs(shapeBaseCenterVertical - shapeCompCenterVertical) < (allShapeGroups[indexOuter].height / 1.5)) {
-
+                    
+                    if (((base_left + minHorizontal) < comp_right && (base_right - minHorizontal) > comp_left) || // other shapeGroup should "overlap" at least minHorizontal distance (single dimension)
+                        ((base_top + minVertical) < comp_bottom && (base_bottom - minVertical) > comp_top))       // other shapeGroup should "overlap" at least minVertical   distance (single dimension)
+                    {
                         allShapeGroups[indexOuter] = new NA.shapeGroup(allShapeGroups[indexOuter].shapes.concat(allShapeGroups[indexInner]));
                         toRemoveIndexes.push(indexInner);
-                        //break;
+
                     }
+
                 }
 
             }
@@ -977,11 +990,8 @@ NA.connectShapes = function (allShapes, mode) {
 NA.noteLeftclick = function (e) {
     var noteBox;
     if (NA.settings.clickResizeActive && e && e.target) {
-        if (((NA.settings.clickResizeCtrl && e.ctrlKey) ||
-             (!NA.settings.clickResizeCtrl && !e.ctrlKey)) &&
-
-             ((NA.settings.clickResizeShift && e.shiftKey) ||
-             (!NA.settings.clickResizeShift && !e.shiftKey)))
+        if (((NA.settings.clickResizeCtrl && e.ctrlKey) || (!NA.settings.clickResizeCtrl && !e.ctrlKey)) &&
+            ((NA.settings.clickResizeShift && e.shiftKey) || (!NA.settings.clickResizeShift && !e.shiftKey)))
         {
             if ($(e.target).hasClass('note-box')) {
                 noteBox = e.target;
@@ -991,6 +1001,20 @@ NA.noteLeftclick = function (e) {
             }
 
             NA.snap('note', noteBox);
+        }
+    }
+    if (NA.settings.clickResizeRectangleActive && e && e.target) {
+        if (((NA.settings.clickResizeRectangleCtrl && e.ctrlKey) || (!NA.settings.clickResizeRectangleCtrl && !e.ctrlKey)) &&
+            ((NA.settings.clickResizeRectangleShift && e.shiftKey) || (!NA.settings.clickResizeRectangleShift && !e.shiftKey)))
+        {
+            if ($(e.target).hasClass('note-box')) {
+                noteBox = e.target;
+            }
+            else if ($(e.target).parent().hasClass('note-box')) {
+                noteBox = e.target.parentNode;
+            }
+
+            NA.snap('squareTextbox', noteBox);
         }
     }
 };
@@ -1069,6 +1093,7 @@ NA.ghostNote = function (mode) {
 
 
 NA.snap = function (mode, theNote, x, y, width, height) {
+    if (mode == 'squareTextbox') { return; } //debug, unfinished
     // ================================================================================
     // mode "note" = resize passed theNote to largest text found
     // mode "last" = does the same, but finds last note first
@@ -1077,7 +1102,10 @@ NA.snap = function (mode, theNote, x, y, width, height) {
     // mode "full" = entire image, creates new notes instead of resizing existing
     // ignores text that already has a note over it
     // ================================================================================
-    // mode "area" / "virtual" = pass x/y/width/height parameters // unused for now
+    // mode "squareTextbox" = expands 100px and snaps to the background of a square textbubble if it's found
+    // unfinished, doesn't work yet
+    // ================================================================================
+    // mode "area" / "virtual" = pass x/y/width/height parameters // unused for now, but should be working
     // scan area inside the parameters, create 1 note on largest text found
     // ================================================================================
 
@@ -1300,7 +1328,7 @@ NA.snap = function (mode, theNote, x, y, width, height) {
     // not sure if needed, as it does slow down the script quite a bit, need more data first
     //if (mode == 'full') {
 
-    //}
+    // }
 
 
 
@@ -1315,7 +1343,7 @@ NA.snap = function (mode, theNote, x, y, width, height) {
         for (var i = 0; i < allShapeGroups.length; i++) {
             context.strokeRect(allShapeGroups[i].left, allShapeGroups[i].top, (allShapeGroups[i].right - allShapeGroups[i].left), (allShapeGroups[i].bottom - allShapeGroups[i].top));
 
-            //context.fillText(i, allShapeGroups[i].left, allShapeGroups[i].top+8); // useful in combo with the group "average:" debug text
+            context.fillText(i, allShapeGroups[i].left, allShapeGroups[i].top+8); // useful in combo with the group "average:" debug text
         }
         imageData = context.getImageData(0, 0, width, height);
         NA.benchmark('T-DrawShapeGroups T:');
@@ -1951,7 +1979,7 @@ NA.settingsMenuCreate = function () {
         '<input  id="noteAssist_alwaysResize" type="checkbox" ' + (NA.settings.alwaysResize ? 'checked' : '') + ' class="settingMenu_checkbox"/>' +
         '<label for="noteAssist_alwaysResize"> Always resize new note</label></span></br>' +
 
-        '<hr/><span title="A click with the selected combination of ctrl & shift will resize the note, fitting it to text">Clicking a note will resize it:</br>' +
+        '<hr/><span title="A click with the selected combination of ctrl & shift will resize the note, fitting it to text">Clicking note resizes to text:</br>' +
         '' +
         '<input  id="noteAssist_clickResizeActive" type="checkbox" ' + (NA.settings.clickResizeActive ? 'checked' : '') + ' class="settingMenu_checkbox">' +
         '<label for="noteAssist_clickResizeActive"> Enabled &nbsp;&nbsp;&nbsp;&nbsp;</label></span>' +
@@ -1959,7 +1987,17 @@ NA.settingsMenuCreate = function () {
         '<label for="noteAssist_clickResizeCtrl"> Ctrl &nbsp;&nbsp;&nbsp;&nbsp;</label>' +
         '<input  id="noteAssist_clickResizeShift" type="checkbox" ' + (NA.settings.clickResizeShift ? 'checked' : '') + ' class="settingMenu_checkbox">' +
         '<label for="noteAssist_clickResizeShift"> Shift</label>' +
-            
+
+        //'<br/><br/>' +
+        //'<span title="A click with the selected combination of ctrl & shift will resize the note, fitting it to a square textbox, if one is found - This also works if the note is smaller than the textbox!">Clicking note resizes to square textbox:</br>' +
+        //'' +
+        //'<input  id="noteAssist_clickResizeRectangleActive" type="checkbox" ' + (NA.settings.clickResizeRectangleActive ? 'checked' : '') + ' class="settingMenu_checkbox">' +
+        //'<label for="noteAssist_clickResizeRectangleActive"> Enabled &nbsp;&nbsp;&nbsp;&nbsp;</label></span>' +
+        //'<input  id="noteAssist_clickResizeRectangleCtrl" type="checkbox" ' + (NA.settings.clickResizeRectangleCtrl ? 'checked' : '') + ' class="settingMenu_checkbox">' +
+        //'<label for="noteAssist_clickResizeRectangleCtrl"> Ctrl &nbsp;&nbsp;&nbsp;&nbsp;</label>' +
+        //'<input  id="noteAssist_clickResizeRectangleShift" type="checkbox" ' + (NA.settings.clickResizeRectangleShift ? 'checked' : '') + ' class="settingMenu_checkbox">' +
+        //'<label for="noteAssist_clickResizeRectangleShift"> Shift</label>' +
+
         '' +
         '' +
         '' +
